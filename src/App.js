@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 
-// API Keys
+// 🔐 API Keys (set in Vercel or .env file)
 const API_URL = process.env.REACT_APP_WC_API_URL;
 const CONSUMER_KEY = process.env.REACT_APP_WC_CONSUMER_KEY;
 const CONSUMER_SECRET = process.env.REACT_APP_WC_CONSUMER_SECRET;
@@ -13,28 +13,25 @@ const App = () => {
     const [cartTotal, setCartTotal] = useState(0);
     const [paymentStatus, setPaymentStatus] = useState(null);
 
-    // ✅ Wrap API fetch in useCallback to prevent re-creation on each render
+    // ✅ Fetch WooCommerce Data
     const fetchWooCommerceData = useCallback(async () => {
         try {
+            // Fetch categories
             const categoriesResponse = await fetch(
                 `${API_URL}/products/categories?consumer_key=${CONSUMER_KEY}&consumer_secret=${CONSUMER_SECRET}`
             );
             const categoriesData = await categoriesResponse.json();
             setCategories(categoriesData);
 
-            // Fetch all products across multiple pages
+            // Fetch all products
             const allProducts = await fetchAllProducts();
             setProducts(allProducts);
         } catch (error) {
             console.error("❌ Error fetching WooCommerce data:", error);
         }
-    }, []); // Empty array ensures it runs only once
+    }, []);
 
-    // ✅ Corrected useEffect: Now calls API correctly
-    useEffect(() => {
-        fetchWooCommerceData();
-    }, [fetchWooCommerceData]);
-
+    // ✅ Fetch All WooCommerce Products
     const fetchAllProducts = async (page = 1, collectedProducts = []) => {
         try {
             const response = await fetch(
@@ -43,7 +40,6 @@ const App = () => {
             const data = await response.json();
 
             if (data.length === 0) return collectedProducts;
-
             return fetchAllProducts(page + 1, [...collectedProducts, ...data]);
         } catch (error) {
             console.error("❌ Error fetching paginated products:", error);
@@ -51,6 +47,12 @@ const App = () => {
         }
     };
 
+    // ✅ Fetch data when component loads
+    useEffect(() => {
+        fetchWooCommerceData();
+    }, [fetchWooCommerceData]);
+
+    // ✅ Filter Products by Category
     const getFilteredProducts = () => {
         if (selectedCategory === null) return products;
         return products.filter(product =>
@@ -58,22 +60,29 @@ const App = () => {
         );
     };
 
+    // ✅ Handle Payment Status from Zettle
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const success = urlParams.get("success");
         const failure = urlParams.get("failure");
 
         if (success) {
+            console.log("✅ Payment Successful");
             setPaymentStatus("success");
             setCart([]);
             setCartTotal(0);
+
+            // 🔄 Sync WooCommerce order
+            syncPaymentToWooCommerce();
         } else if (failure) {
+            console.log("❌ Payment Failed");
             setPaymentStatus("failed");
         }
 
         window.history.replaceState(null, "", window.location.pathname);
     }, []);
 
+    // ✅ Open Zettle App for Payment
     const openZettlePayment = () => {
         if (cartTotal === 0) {
             alert("Cart is empty! Add items before checkout.");
@@ -88,6 +97,36 @@ const App = () => {
         window.location.href = zettleURL;
     };
 
+    // ✅ Sync Successful Payment with WooCommerce
+    const syncPaymentToWooCommerce = async () => {
+        try {
+            const orderData = {
+                payment_method: "zettle",
+                payment_method_title: "Paid via Zettle",
+                set_paid: true,
+                line_items: cart.map(item => ({
+                    product_id: item.id,
+                    quantity: 1
+                }))
+            };
+
+            const response = await fetch(
+                `${API_URL}/orders?consumer_key=${CONSUMER_KEY}&consumer_secret=${CONSUMER_SECRET}`,
+                {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(orderData)
+                }
+            );
+
+            const data = await response.json();
+            console.log("🛒 Order Synced to WooCommerce:", data);
+        } catch (error) {
+            console.error("❌ Error syncing payment:", error);
+        }
+    };
+
+    // ✅ Add to Cart
     const addToCart = (product) => {
         setCart([...cart, product]);
         setCartTotal(cartTotal + parseFloat(product.price));
@@ -97,6 +136,7 @@ const App = () => {
         <div>
             <h1>WooZettle POS</h1>
 
+            {/* ✅ Payment Status */}
             {paymentStatus === "success" && (
                 <div className="payment-success">
                     <h2>✅ Payment Successful</h2>
@@ -104,7 +144,6 @@ const App = () => {
                     <button onClick={() => setPaymentStatus(null)}>Back to POS</button>
                 </div>
             )}
-
             {paymentStatus === "failed" && (
                 <div className="payment-failed">
                     <h2>❌ Payment Failed</h2>
@@ -113,42 +152,36 @@ const App = () => {
                 </div>
             )}
 
+            {/* ✅ Categories */}
             <h2>Categories</h2>
             <div>
-                {categories.length > 0 ? (
-                    categories.map((category) => (
-                        <button key={category.id} onClick={() => setSelectedCategory(category.id)}>
-                            {category.name}
-                        </button>
-                    ))
-                ) : (
-                    <p>Loading categories...</p>
-                )}
+                {categories.map((category) => (
+                    <button key={category.id} onClick={() => setSelectedCategory(category.id)}>
+                        {category.name}
+                    </button>
+                ))}
                 <button onClick={() => setSelectedCategory(null)}><strong>Show All</strong></button>
             </div>
 
+            {/* ✅ Products */}
             <h2>Products</h2>
             <p>Found {getFilteredProducts().length} products</p>
             <div>
-                {getFilteredProducts().length > 0 ? (
-                    getFilteredProducts().map((product) => (
-                        <div key={product.id}>
-                            <img 
-                                src={product.images?.length > 0 ? product.images[0].src : "https://via.placeholder.com/150"} 
-                                alt={product.name} 
-                                width="150" 
-                                onError={(e) => e.target.src = "https://via.placeholder.com/150"}
-                            />
-                            <p>{product.name}</p>
-                            <p>${product.price}</p>
-                            <button onClick={() => addToCart(product)}>Add to Cart</button>
-                        </div>
-                    ))
-                ) : (
-                    <p>No products found for this category.</p>
-                )}
+                {getFilteredProducts().map((product) => (
+                    <div key={product.id}>
+                        <img 
+                            src={product.images?.[0]?.src || "https://via.placeholder.com/150"} 
+                            alt={product.name} 
+                            width="150" 
+                        />
+                        <p>{product.name}</p>
+                        <p>${product.price}</p>
+                        <button onClick={() => addToCart(product)}>Add to Cart</button>
+                    </div>
+                ))}
             </div>
 
+            {/* ✅ Checkout */}
             <h2>Cart Total: £{cartTotal.toFixed(2)}</h2>
             <button onClick={openZettlePayment} className="checkout-button">
                 Pay with Zettle
@@ -158,6 +191,7 @@ const App = () => {
 };
 
 export default App;
+
 
 
 
