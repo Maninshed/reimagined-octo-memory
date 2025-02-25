@@ -16,14 +16,12 @@ const App = () => {
     // ✅ Fetch WooCommerce Data
     const fetchWooCommerceData = useCallback(async () => {
         try {
-            // Fetch categories
             const categoriesResponse = await fetch(
                 `${API_URL}/products/categories?consumer_key=${CONSUMER_KEY}&consumer_secret=${CONSUMER_SECRET}`
             );
             const categoriesData = await categoriesResponse.json();
             setCategories(categoriesData);
 
-            // Fetch all products
             const allProducts = await fetchAllProducts();
             setProducts(allProducts);
         } catch (error) {
@@ -47,7 +45,6 @@ const App = () => {
         }
     };
 
-    // ✅ Fetch data when component loads
     useEffect(() => {
         fetchWooCommerceData();
     }, [fetchWooCommerceData]);
@@ -71,8 +68,6 @@ const App = () => {
             setPaymentStatus("success");
             setCart([]);
             setCartTotal(0);
-
-            // 🔄 Sync WooCommerce order
             syncPaymentToWooCommerce();
         } else if (failure) {
             console.log("❌ Payment Failed");
@@ -82,7 +77,7 @@ const App = () => {
         window.history.replaceState(null, "", window.location.pathname);
     }, []);
 
-    // ✅ Open Zettle App for Payment
+    // ✅ Open Zettle App for Payment (Mobile Fix)
     const openZettlePayment = () => {
         if (cartTotal === 0) {
             alert("Cart is empty! Add items before checkout.");
@@ -94,7 +89,10 @@ const App = () => {
         const failureURL = encodeURIComponent(window.location.origin + "?failure=true");
         const zettleURL = `iZettle://payment?amount=${formattedAmount}&currency=GBP&successURL=${successURL}&failureURL=${failureURL}`;
 
-        window.location.href = zettleURL;
+        alert(`Opening Zettle with URL:\n${zettleURL}`);
+
+        // Open in a new tab (fix for mobile deep linking issues)
+        window.open(zettleURL, "_blank");
     };
 
     // ✅ Sync Successful Payment with WooCommerce
@@ -191,8 +189,6 @@ const App = () => {
 };
 
 export default App;
-
-
 
 
 
